@@ -86,4 +86,6 @@ export class GameManager extends Component {
     protected onDestroy() {
         view.off('canvas-resize', this.onScreenResize, this);
     }
+
+    
 }

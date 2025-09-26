@@ -189,9 +189,9 @@
     "_far": 2000,
     "_color": {
       "__type__": "cc.Color",
-      "r": 0,
-      "g": 0,
-      "b": 0,
+      "r": 255,
+      "g": 255,
+      "b": 255,
       "a": 255
     },
     "_depth": 1,
@@ -243,8 +243,8 @@
     },
     "_lscale": {
       "__type__": "cc.Vec3",
-      "x": 1,
-      "y": 1,
+      "x": 0.7,
+      "y": 0.7,
       "z": 1
     },
     "_mobility": 0,
@@ -384,7 +384,7 @@
       "__id__": 11
     },
     "baseWidth": 8,
-    "baseHeight": 10,
+    "baseHeight": 6,
     "padding": 0,
     "_id": "9dcbLVs1BHWZt3hRU+jzco"
   },

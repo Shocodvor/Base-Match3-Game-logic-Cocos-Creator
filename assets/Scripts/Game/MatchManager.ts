@@ -1,5 +1,5 @@
-import { _decorator, Component, Vec3, Node } from 'cc';
-import { CellComponent, CellType } from '../Cell/CellComponent'; // Добавляем импорт
+import { _decorator, Component, Vec3, Node, tween } from 'cc';
+import { CellComponent, CellType } from '../Cell/CellComponent';
 const { ccclass, property } = _decorator;
 
 @ccclass('MatchManager')
@@ -10,7 +10,6 @@ export class MatchManager extends Component {
     private isMatchInProgress: boolean = false;
     
     onLoad() {
-        // Создаем синглтон
         if (MatchManager.instance === null) {
             MatchManager.instance = this;
         } else {
@@ -21,7 +20,6 @@ export class MatchManager extends Component {
         console.log('MatchManager loaded');
     }
     
-    // Публичный метод для регистрации кликов от клеток
     public registerCellClick(cell: CellComponent) {
         console.log('MatchManager: Cell click registered', cell.cellX, cell.cellY, cell.cellType);
         
@@ -30,7 +28,6 @@ export class MatchManager extends Component {
             return;
         }
         
-        // Проверяем, не выбрана ли уже эта клетка
         if (cell.getIsSelected()) {
             console.log('Cell already selected');
             return;
@@ -40,14 +37,12 @@ export class MatchManager extends Component {
     }
     
     private processCellSelection(cell: CellComponent) {
-        // Добавляем клетку в список выбранных
         cell.setSelected(true);
         this.selectedCells.push(cell);
         
         console.log(`Selected cell at (${cell.cellX}, ${cell.cellY}) type: ${cell.cellType}`);
         console.log(`Total selected: ${this.selectedCells.length}`);
         
-        // Проверяем условия матчинга
         if (this.selectedCells.length === 3) {
             this.checkForMatch();
         }
@@ -56,7 +51,6 @@ export class MatchManager extends Component {
     private checkForMatch() {
         this.isMatchInProgress = true;
         
-        // Проверяем, все ли три клетки одного типа
         const firstType = this.selectedCells[0].cellType;
         const allSameType = this.selectedCells.every(cell => cell.cellType === firstType);
         
@@ -75,65 +69,88 @@ export class MatchManager extends Component {
     private handleMatchSuccess() {
         console.log('MATCH SUCCESS! Type:', this.selectedCells[0].cellType);
         
-        // Визуальные эффекты для успешного матча
-        this.playSuccessAnimation();
+        const matchedCells = [...this.selectedCells];
         
-        // Сбрасываем выбор после задержки
-        this.scheduleOnce(() => {
-            this.resetMatch();
-        }, 1.0);
+        this.playSuccessAnimation().then(() => {
+            const gameManager = this.findGameManager();
+            if (gameManager && gameManager.getBoardController()) {
+                gameManager.getBoardController().removeMatchedCells(matchedCells).then(() => {
+                    console.log('Cells shifted and new cells created');
+                    this.resetMatch();
+                });
+            } else {
+                console.error('GameManager or BoardController not found!');
+                this.resetMatch();
+            }
+        });
     }
     
     private handleMatchFail() {
         console.log('MATCH FAIL! Types:', this.selectedCells.map(cell => cell.cellType));
         
-        // Визуальные эффекты для неудачного матча
-        this.playFailAnimation();
-        
-        // Сбрасываем выбор после задержки
-        this.scheduleOnce(() => {
+        this.playFailAnimation().then(() => {
             this.resetMatch();
-        }, 1.0);
-    }
-    
-    private playSuccessAnimation() {
-        // Анимация успеха - мигание клеток
-        this.selectedCells.forEach((cell, index) => {
-            this.scheduleOnce(() => {
-                cell.node.setScale(new Vec3(1.2, 1.2, 1.2));
-                this.scheduleOnce(() => {
-                    cell.node.setScale(new Vec3(1.0, 1.0, 1.0));
-                }, 0.2);
-            }, index * 0.1);
         });
     }
     
-    private playFailAnimation() {
-        // Анимация неудачи - тряска клеток
-        this.selectedCells.forEach(cell => {
-            const originalPos = cell.node.position.clone();
-            const shakeOffset = 5;
+    private playSuccessAnimation(): Promise<void> {
+        return new Promise((resolve) => {
+            const animations: Promise<void>[] = [];
             
-            cell.node.setPosition(originalPos.x + shakeOffset, originalPos.y, originalPos.z);
-            this.scheduleOnce(() => {
-                cell.node.setPosition(originalPos.x - shakeOffset, originalPos.y, originalPos.z);
-                this.scheduleOnce(() => {
-                    cell.node.setPosition(originalPos.x, originalPos.y, originalPos.z);
-                }, 0.1);
-            }, 0.1);
+            this.selectedCells.forEach((cell, index) => {
+                const animationPromise = new Promise<void>((animResolve) => {
+                    tween(cell.node)
+                        .delay(index * 0.1)
+                        .to(0.1, { scale: new Vec3(1.2, 1.2, 1.2) })
+                        .to(0.1, { scale: new Vec3(1.0, 1.0, 1.0) })
+                        .call(() => animResolve())
+                        .start();
+                });
+                animations.push(animationPromise);
+            });
+            
+            Promise.all(animations).then(() => resolve());
+        });
+    }
+    
+    private playFailAnimation(): Promise<void> {
+        return new Promise((resolve) => {
+            const animations: Promise<void>[] = [];
+            
+            this.selectedCells.forEach(cell => {
+                const originalPos = cell.node.position.clone();
+                const animationPromise = new Promise<void>((animResolve) => {
+                    tween(cell.node)
+                        .to(0.1, { position: new Vec3(originalPos.x + 5, originalPos.y, originalPos.z) })
+                        .to(0.1, { position: new Vec3(originalPos.x - 5, originalPos.y, originalPos.z) })
+                        .to(0.1, { position: originalPos })
+                        .call(() => animResolve())
+                        .start();
+                });
+                animations.push(animationPromise);
+            });
+            
+            Promise.all(animations).then(() => resolve());
         });
     }
     
     private resetMatch() {
         console.log('Resetting match');
         
-        // Сбрасываем все выбранные клетки
         this.selectedCells.forEach(cell => {
             cell.setSelected(false);
         });
         
         this.selectedCells = [];
         this.isMatchInProgress = false;
+    }
+    
+    private findGameManager(): any {
+        const gameManagerNode = this.node.scene.getChildByName('GameManager');
+        if (gameManagerNode) {
+            return gameManagerNode.getComponent('GameManager');
+        }
+        return null;
     }
     
     public static getInstance(): MatchManager {
