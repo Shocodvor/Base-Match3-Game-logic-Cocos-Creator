@@ -1,5 +1,4 @@
-import { _decorator, Component, Sprite, Color, Button, EventHandler } from 'cc';
-// Импортируем MatchManager
+import { _decorator, Component, Sprite, Color, Button, EventHandler, Node, tween, Vec3 } from 'cc';
 import { MatchManager } from '../Game/MatchManager';
 const { ccclass, property } = _decorator;
 
@@ -33,6 +32,12 @@ export class CellComponent extends Component {
     @property(Button)
     private cellButton: Button = null!;
     
+    @property(Sprite)
+    private selectionFrame: Sprite = null!;
+    
+    @property(Node)
+    private selectionEffect: Node = null!;
+    
     private readonly cellColors: Color[] = [
         new Color(255, 0, 0, 255),
         new Color(0, 100, 255, 255),
@@ -47,45 +52,36 @@ export class CellComponent extends Component {
     ];
     
     private isSelected: boolean = false;
+    private selectionColor: Color = Color.YELLOW;
     
     onLoad() {
         this.initializeButton();
+        this.hideSelection();
         console.log(`Cell loaded at (${this.cellX}, ${this.cellY})`);
     }
     
-   public initialize(x: number, y: number, type: CellType) {
-    this.cellX = x;
-    this.cellY = y;
-    this.cellType = type;
-    this.updateVisual(); // Этот метод должен обновлять внешний вид
-}
+    public initialize(x: number, y: number, type: CellType) {
+        this.cellX = x;
+        this.cellY = y;
+        this.cellType = type;
+        this.updateVisual();
+    }
     
     private initializeButton() {
         if (this.cellButton) {
-            console.log('Initializing button for cell', this.cellX, this.cellY);
-            
-            // Создаем новый обработчик событий
             this.cellButton.clickEvents = [];
             const clickHandler = new EventHandler();
             clickHandler.target = this.node;
             clickHandler.component = 'CellComponent';
             clickHandler.handler = 'onCellClicked';
             this.cellButton.clickEvents.push(clickHandler);
-        } else {
-            console.error('Cell button is null!', this.cellX, this.cellY);
         }
     }
     
     private updateVisual() {
         if (this.cellSprite) {
-            // Устанавливаем цвет в зависимости от типа
             if (this.cellType >= 0 && this.cellType < this.cellColors.length) {
                 this.cellSprite.color = this.cellColors[this.cellType];
-            }
-            
-            // Если клетка выбрана, добавляем эффект выделения
-            if (this.isSelected) {
-                this.cellSprite.color = this.cellSprite.color.multiply(new Color(1.5, 1.5, 1.5, 1));
             }
         }
     }
@@ -93,28 +89,106 @@ export class CellComponent extends Component {
     public onCellClicked() {
         console.log('Cell clicked:', this.cellX, this.cellY, this.cellType);
         
-        // Прямой вызов MatchManager через синглтон
         const matchManager = MatchManager.getInstance();
         if (matchManager) {
             matchManager.registerCellClick(this);
         } else {
             console.error('MatchManager not found!');
-            
-            // Альтернативная попытка найти MatchManager на сцене
-            const matchManagerNode = this.node.scene.getChildByName('MatchManager');
-            if (matchManagerNode) {
-                const manager = matchManagerNode.getComponent(MatchManager) as MatchManager;
-                if (manager) {
-                    console.log('Found MatchManager through scene search');
-                    manager.registerCellClick(this);
-                }
-            }
         }
+    }
+    
+    // Показываем выделение с определенным цветом
+    public showSelection(color: Color = Color.YELLOW) {
+        this.isSelected = true;
+        this.selectionColor = color;
+        
+        if (this.selectionFrame) {
+            this.selectionFrame.color = color;
+            this.selectionFrame.node.active = true;
+        }
+        
+        if (this.selectionEffect) {
+            this.selectionEffect.active = true;
+        }
+        
+        // Анимация выделения с использованием tween
+        tween(this.node)
+            .to(0.1, { scale: new Vec3(1.1, 1.1, 1.1) })
+            .to(0.1, { scale: new Vec3(1, 1, 1) })
+            .start();
+    }
+    
+    // Скрываем выделение
+    public hideSelection() {
+        this.isSelected = false;
+        
+        if (this.selectionFrame) {
+            this.selectionFrame.node.active = false;
+        }
+        
+        if (this.selectionEffect) {
+            this.selectionEffect.active = false;
+        }
+        
+        // Возвращаем нормальный масштаб
+        this.node.setScale(1, 1, 1);
+    }
+    
+    // Меняем цвет выделения (для ошибки)
+    public setSelectionColor(color: Color) {
+        this.selectionColor = color;
+        if (this.isSelected && this.selectionFrame) {
+            this.selectionFrame.color = color;
+        }
+    }
+    
+    // Анимация ошибки (красное мигание) с использованием tween
+    public playErrorAnimation(): Promise<void> {
+        return new Promise((resolve) => {
+            this.setSelectionColor(Color.RED);
+            
+            tween(this.node)
+                .to(0.1, { scale: new Vec3(1.15, 1.15, 1.15) })
+                .to(0.1, { scale: new Vec3(0.95, 0.95, 0.95) })
+                .to(0.1, { scale: new Vec3(1.05, 1.05, 1.05) })
+                .to(0.1, { scale: new Vec3(1, 1, 1) })
+                .call(() => {
+                    this.hideSelection();
+                    resolve();
+                })
+                .start();
+        });
+    }
+    
+    // Анимация успешного выделения с использованием tween
+    public playSuccessAnimation(): Promise<void> {
+
+         const matchManager = MatchManager.getInstance();
+        if (matchManager) {
+            matchManager.resetMatch();
+        } else {
+            console.error('MatchManager not found!');
+        }
+
+
+
+        return new Promise((resolve) => {
+            tween(this.node)
+                .to(0.1, { scale: new Vec3(1.2, 1.2, 1.2) })
+                .to(0.1, { scale: new Vec3(1, 1, 1) })
+                .call(() => resolve())
+                .start();
+        });
+
     }
     
     public setSelected(selected: boolean) {
         this.isSelected = selected;
-        this.updateVisual();
+        if (selected) {
+            this.showSelection();
+        } else {
+            this.hideSelection();
+        }
     }
     
     public getIsSelected(): boolean {

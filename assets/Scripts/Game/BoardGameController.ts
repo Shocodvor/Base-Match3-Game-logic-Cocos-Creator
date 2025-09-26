@@ -120,33 +120,23 @@ export class BoardGameController extends Component {
     });
 }
 
-// private getColumnsWithEmptyCells(): number[] {
-//     const columns: number[] = [];
-//     for (let x = 0; x < this.boardWidth; x++) {
-//         for (let y = 0; y < this.boardHeight; y++) {
-//             if (this.cells[y][x] === null) {
-//                 if (!columns.includes(x)) {
-//                     columns.push(x);
-//                 }
-//                 break; // Достаточно найти одну пустую клетку в столбце
-//             }
-//         }
-//     }
-//     return columns;
-// }
-
 private shiftCellsDown(): Promise<void> {
     return new Promise((resolve) => {
         const shiftPromises: Promise<void>[] = [];
 
         // Обрабатываем каждый столбец отдельно
         for (let x = 0; x < this.boardWidth; x++) {
-            // Собираем все существующие клетки в столбце снизу вверх
+            // Собираем все НЕпустые клетки в столбце
             const existingCells: Node[] = [];
             for (let y = this.boardHeight - 1; y >= 0; y--) {
                 if (this.cells[y][x] !== null) {
                     existingCells.push(this.cells[y][x]);
                 }
+            }
+            
+            // Очищаем столбец
+            for (let y = 0; y < this.boardHeight; y++) {
+                this.cells[y][x] = null!;
             }
             
             // Заполняем столбец снизу существующими клетками
@@ -156,19 +146,11 @@ private shiftCellsDown(): Promise<void> {
                 const cellComponent = cell.getComponent(CellComponent);
                 
                 if (cellComponent) {
-                    const currentY = cellComponent.cellY;
-                    
-                    // Если клетка уже на правильной позиции, пропускаем
-                    if (currentY === targetY) continue;
-                    
                     // Обновляем координаты
                     cellComponent.cellY = targetY;
                     
                     // Обновляем массив клеток
                     this.cells[targetY][x] = cell;
-                    if (currentY >= 0 && currentY < this.boardHeight) {
-                        this.cells[currentY][x] = null!;
-                    }
                     
                     // Анимация перемещения
                     const newPos = this.getCellPosition(x, targetY);

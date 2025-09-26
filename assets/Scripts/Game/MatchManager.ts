@@ -1,4 +1,4 @@
-import { _decorator, Component, Vec3, Node, tween } from 'cc';
+import { _decorator, Component, Vec3, Node, tween, Color } from 'cc';
 import { CellComponent, CellType } from '../Cell/CellComponent';
 const { ccclass, property } = _decorator;
 
@@ -29,7 +29,13 @@ export class MatchManager extends Component {
         }
         
         if (cell.getIsSelected()) {
-            console.log('Cell already selected');
+            console.log('Cell already selected, deselecting');
+            this.deselectCell(cell);
+            return;
+        }
+        
+        if (this.selectedCells.length >= 3) {
+            console.log('Already selected 3 cells, cannot select more');
             return;
         }
         
@@ -37,7 +43,7 @@ export class MatchManager extends Component {
     }
     
     private processCellSelection(cell: CellComponent) {
-        cell.setSelected(true);
+        cell.showSelection(Color.YELLOW);
         this.selectedCells.push(cell);
         
         console.log(`Selected cell at (${cell.cellX}, ${cell.cellY}) type: ${cell.cellType}`);
@@ -45,6 +51,14 @@ export class MatchManager extends Component {
         
         if (this.selectedCells.length === 3) {
             this.checkForMatch();
+        }
+    }
+    
+    private deselectCell(cell: CellComponent) {
+        const index = this.selectedCells.indexOf(cell);
+        if (index > -1) {
+            this.selectedCells.splice(index, 1);
+            cell.hideSelection();
         }
     }
     
@@ -71,6 +85,7 @@ export class MatchManager extends Component {
         
         const matchedCells = [...this.selectedCells];
         
+        // Анимация успеха с использованием tween
         this.playSuccessAnimation().then(() => {
             const gameManager = this.findGameManager();
             if (gameManager && gameManager.getBoardController()) {
@@ -88,6 +103,10 @@ export class MatchManager extends Component {
     private handleMatchFail() {
         console.log('MATCH FAIL! Types:', this.selectedCells.map(cell => cell.cellType));
         
+        this.selectedCells.forEach(cell => {
+            cell.setSelectionColor(Color.RED);
+        });
+        
         this.playFailAnimation().then(() => {
             this.resetMatch();
         });
@@ -99,11 +118,12 @@ export class MatchManager extends Component {
             
             this.selectedCells.forEach((cell, index) => {
                 const animationPromise = new Promise<void>((animResolve) => {
-                    tween(cell.node)
+                    // Используем tween для задержки вместо setTimeout
+                    tween(this.node)
                         .delay(index * 0.1)
-                        .to(0.1, { scale: new Vec3(1.2, 1.2, 1.2) })
-                        .to(0.1, { scale: new Vec3(1.0, 1.0, 1.0) })
-                        .call(() => animResolve())
+                        .call(() => {
+                            cell.playSuccessAnimation().then(() => animResolve());
+                        })
                         .start();
                 });
                 animations.push(animationPromise);
@@ -118,27 +138,18 @@ export class MatchManager extends Component {
             const animations: Promise<void>[] = [];
             
             this.selectedCells.forEach(cell => {
-                const originalPos = cell.node.position.clone();
-                const animationPromise = new Promise<void>((animResolve) => {
-                    tween(cell.node)
-                        .to(0.1, { position: new Vec3(originalPos.x + 5, originalPos.y, originalPos.z) })
-                        .to(0.1, { position: new Vec3(originalPos.x - 5, originalPos.y, originalPos.z) })
-                        .to(0.1, { position: originalPos })
-                        .call(() => animResolve())
-                        .start();
-                });
-                animations.push(animationPromise);
+                animations.push(cell.playErrorAnimation());
             });
             
             Promise.all(animations).then(() => resolve());
         });
     }
     
-    private resetMatch() {
+    public resetMatch() {
         console.log('Resetting match');
         
         this.selectedCells.forEach(cell => {
-            cell.setSelected(false);
+            cell.hideSelection();
         });
         
         this.selectedCells = [];
